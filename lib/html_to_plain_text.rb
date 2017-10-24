@@ -48,7 +48,7 @@ module HtmlToPlainText
       body = Nokogiri::HTML::Document.parse(html).xpath(BODY_TAG_XPATH).first
       return unless body
       options = { show_links: true }.merge(options)
-      convert_node_to_plain_text(body, '', options).strip.gsub(CARRIAGE_RETURN_PATTERN, NEWLINE)
+      convert_node_to_plain_text(body, [''], options).join('').strip.gsub(CARRIAGE_RETURN_PATTERN, NEWLINE)
     end
 
     private
@@ -70,23 +70,23 @@ module HtmlToPlainText
           text = node.text
           unless options[:pre]
             text.gsub!(ALL_WHITESPACE_PATTERN, SPACE)
-            text.lstrip! if WHITESPACE.include?(out[-1, 1])
+            text.lstrip! if WHITESPACE.include?(out[-1][-1, 1])
           end
-          out << text
+          out << text if text.size > 0
         elsif node.name == PLAINTEXT
-          out << node.text
+          out << node.text if node.text.size > 0
         elsif node.element? && !IGNORE_TAGS.include?(node.name)
           convert_node_to_plain_text(node, out, child_options(node, options))
 
           if node.name == BR
-            out.sub!(TRAILING_WHITESPACE, EMPTY)
-            out << NEWLINE
+            out[-1].sub!(TRAILING_WHITESPACE, EMPTY)
+            out << "\n"
           elsif node.name == HR
-            out.sub!(TRAILING_WHITESPACE, EMPTY)
-            out << NEWLINE unless out.end_with?(NEWLINE)
+            out[-1].sub!(TRAILING_WHITESPACE, EMPTY)
+            out << "\n" unless out[-1].end_with?(NEWLINE)
             out << "-------------------------------\n"
           elsif node.name == TD || node.name == TH
-            out << (data_table?(parent.parent) ? TABLE_SEPARATOR : SPACE)
+            out << (data_table?(parent.parent) ? " | " : " ")
           elsif node.name == A && options[:show_links]
             href = node[HREF]
             if href && href =~ ABSOLUTE_URL_PATTERN
@@ -129,9 +129,9 @@ module HtmlToPlainText
     # Add double line breaks between paragraph elements. If line breaks already exist,
     # new ones will only be added to get to two.
     def append_paragraph_breaks(out)
-      out.sub!(TRAILING_WHITESPACE, EMPTY)
-      if out.end_with?(NEWLINE)
-        out << NEWLINE unless out.end_with?("\n\n")
+      out[-1].sub!(TRAILING_WHITESPACE, EMPTY)
+      if out[-1].end_with?(NEWLINE)
+        out << "\n" unless out[-1].end_with?("\n\n") || (out[-2]&.end_with?("\n") && out[-1] == "\n")
       else
         out << "\n\n"
       end
@@ -140,8 +140,8 @@ module HtmlToPlainText
     # Add a single line break between block elements. If a line break already exists,
     # none will be added.
     def append_block_breaks(out)
-      out.sub!(TRAILING_WHITESPACE, EMPTY)
-      out << NEWLINE unless out.end_with?(NEWLINE)
+      out[-1].sub!(TRAILING_WHITESPACE, EMPTY)
+      out << "\n" unless out[-1].end_with?(NEWLINE)
     end
 
     # Add an appropriate bullet or number to a list element.
